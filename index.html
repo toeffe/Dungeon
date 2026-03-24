@@ -5,25 +5,24 @@
 <title>DUNGEON</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;font-family:monospace;}
-canvas{display:block;cursor:none;max-width:100%;max-height:100%;}
-#ui{margin-top:5px;color:#1a1430;font:10px monospace;text-align:center;letter-spacing:.07em;user-select:none;}
-#ui b{color:#2a1e50;}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:monospace;}
+canvas{display:block;cursor:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);}
+#ui{position:absolute;bottom:4px;left:0;right:0;color:rgba(255,255,255,.18);font:9px monospace;text-align:center;letter-spacing:.07em;user-select:none;pointer-events:none;}
+#ui b{color:rgba(255,255,255,.32);}
 </style>
 </head>
 <body>
-<canvas id="c" width="800" height="600"></canvas>
+<canvas id="c" width="960" height="540"></canvas>
 <div id="ui">WASD move &nbsp;·&nbsp; <b>MOUSE aim+shoot</b> &nbsp;·&nbsp; SPACE dash &nbsp;·&nbsp; E interact/shop &nbsp;·&nbsp; kill for XP, gold &amp; drops</div>
 <script>
 const C=document.getElementById('c'),ctx=C.getContext('2d');
-const W=800,H=600;
+const W=960,H=540;
 
-// Responsive: scale canvas to fit viewport while keeping 800x600 logical size
+// Responsive: scale canvas to fill the viewport, maintaining 16:9
 function resizeCanvas(){
-  const scaleX=window.innerWidth/W, scaleY=(window.innerHeight-40)/H;
-  const scale=Math.min(scaleX,scaleY,1.5);
-  C.style.width=Math.floor(W*scale)+'px';
-  C.style.height=Math.floor(H*scale)+'px';
+  const scale=Math.min(window.innerWidth/W, window.innerHeight/H);
+  C.style.width=Math.round(W*scale)+'px';
+  C.style.height=Math.round(H*scale)+'px';
 }
 window.addEventListener('resize',resizeCanvas);
 resizeCanvas();
@@ -50,8 +49,10 @@ const angle=(ax,ay,bx,by)=>Math.atan2(by-ay,bx-ax);
 
 // Input
 const K=new Set(),M={x:W/2,y:H/2,down:false,clicked:false,rclicked:false};
+let ePressed=false;  // consumed once per keydown, like M.clicked
 window.addEventListener('keydown',e=>{
   K.add(e.code);e.preventDefault();
+  if(e.code==='KeyE')ePressed=true;
   // Open pending level-up with TAB
   if(e.code==='Tab'&&G&&G.levelUpPending&&!G.levelUpChoices&&!G.shopOpen){
     G.levelUpChoices=rollLevelUp();G.levelUpPending=false;G.paused=true;
@@ -63,8 +64,6 @@ C.addEventListener('mousemove',e=>{const r=C.getBoundingClientRect();M.x=(e.clie
 C.addEventListener('mousedown',e=>{if(e.button===0){M.down=true;M.clicked=true;}if(e.button===2)M.rclicked=true;});
 C.addEventListener('mouseup',e=>{if(e.button===0)M.down=false;});
 C.addEventListener('contextmenu',e=>e.preventDefault());
-let ePressed=false;  // consumed once per keydown, like M.clicked
-window.addEventListener('keydown',e=>{if(e.code==='KeyE')ePressed=true;});
 
 // ═══════════════════════════════════════════════
 // TILE TEXTURES  (biome-aware, rebuilt each floor)
@@ -80,8 +79,10 @@ function makeTile(drawFn){
 
 // ── Biome helper ──────────────────────────────────────────────────────────────
 function getBiome(floor){
-  if(floor<=1) return 'forest';
-  if(floor<=3) return 'rocky';
+  if(floor<=2) return 'forest';
+  if(floor<=4) return 'swamp';
+  if(floor<=6) return 'rocky';
+  if(floor<=8) return 'tundra';
   return 'volcanic';
 }
 
@@ -353,6 +354,27 @@ function _buildWaterTile(biome,frame){
     const hg=tc.createRadialGradient(S*.45,S*.4,2,S*.45,S*.4,S*.55);
     hg.addColorStop(0,'rgba(255,200,50,.35)');hg.addColorStop(1,'rgba(0,0,0,0)');
     tc.fillStyle=hg;tc.fillRect(0,0,S,S);
+  } else if(biome==='tundra'){
+    // Frozen ice pool — pale blue, cracked surface
+    tc.fillStyle='#a8c8e0';tc.fillRect(0,0,S,S);
+    _noiseLayer(tc,5,.2,'rgb(160,200,230)',frame*4+1,S);
+    _noiseLayer(tc,9,.15,'rgb(200,230,255)',frame*6+2,S);
+    tc.strokeStyle='rgba(80,120,160,.45)';tc.lineWidth=.8;
+    for(let i=0;i<8;i++){const x1=_hash(i,0,frame+50)*S,y1=_hash(i,1,frame+51)*S,x2=x1+(_hash(i,2,frame+52)-.5)*30,y2=y1+(_hash(i,3,frame+53)-.5)*30;tc.beginPath();tc.moveTo(x1,y1);tc.lineTo(x2,y2);tc.stroke();}
+    const ig=tc.createLinearGradient(0,S*.2+frame*4,0,S*.55);
+    ig.addColorStop(0,'rgba(255,255,255,.3)');ig.addColorStop(1,'rgba(255,255,255,0)');
+    tc.fillStyle=ig;tc.fillRect(0,0,S,S);
+  } else if(biome==='swamp'){
+    // Toxic murky water — dark olive-green
+    tc.fillStyle='#0f1a08';tc.fillRect(0,0,S,S);
+    _noiseLayer(tc,4,.4,'rgb(8,22,4)',frame*5+1,S);
+    _noiseLayer(tc,8,.25,'rgb(25,50,10)',frame*3+2,S);
+    // Toxic slick
+    const tg=tc.createLinearGradient(0,S*.3+frame*3,0,S*.6);
+    tg.addColorStop(0,'rgba(40,160,30,.18)');tg.addColorStop(1,'rgba(0,0,0,0)');
+    tc.fillStyle=tg;tc.fillRect(0,0,S,S);
+    tc.strokeStyle='rgba(50,180,40,.22)';tc.lineWidth=1;
+    for(let i=0;i<4;i++){const ry=_hash(i,0,frame+60)*S;tc.beginPath();for(let x=0;x<=S;x+=5)tc.lineTo(x,ry+Math.sin(x*.28+ph+i)*2.5);tc.stroke();}
   } else if(biome==='rocky'){
     tc.fillStyle='#1c4838';tc.fillRect(0,0,S,S);
     _noiseLayer(tc,5,.3,'rgb(20,80,60)',frame*7+1,S);
@@ -381,6 +403,119 @@ function _buildWaterTile(biome,frame){
   return oc;
 }
 
+// ── Swamp ground — dark murky olive, standing puddles, dead reeds ─────────────
+function _buildSwampPattern(){
+  return _makePattern(tc=>{
+    const S=_PS;
+    tc.fillStyle='#2e3d18';tc.fillRect(0,0,S,S);
+    _noiseLayer(tc,3,.35,'rgb(18,26,8)',43);
+    _noiseLayer(tc,7,.22,'rgb(55,70,20)',61);
+    _noiseLayer(tc,14,.14,'rgb(12,20,5)',79);
+    // Muddy puddles
+    for(let i=0;i<10;i++){
+      const px=_hash(i,0,500)*S,py=_hash(i,1,501)*S,pr=6+_hash(i,2,502)*14;
+      const pg=tc.createRadialGradient(px,py,0,px,py,pr);
+      pg.addColorStop(0,'rgba(8,18,5,.75)');pg.addColorStop(.6,'rgba(20,30,10,.45)');pg.addColorStop(1,'rgba(0,0,0,0)');
+      tc.fillStyle=pg;tc.fillRect(px-pr,py-pr,pr*2,pr*2);
+    }
+    // Dead reeds/grass blades
+    for(let i=0;i<80;i++){
+      const rx=_hash(i,3,503)*S,ry=_hash(i,4,504)*S;
+      const len=5+_hash(i,5,505)*10,ang=(_hash(i,6,506)-.5)*.8-Math.PI/2;
+      tc.strokeStyle=`rgba(${20+_hash(i,7,507)*20|0},${30+_hash(i,7,507)*20|0},5,.6)`;
+      tc.lineWidth=.7+_hash(i,8,508)*.5;
+      tc.beginPath();tc.moveTo(rx,ry);tc.lineTo(rx+Math.cos(ang)*len,ry+Math.sin(ang)*len);tc.stroke();
+    }
+    // Faint glowing patches (bioluminescent moss)
+    for(let i=0;i<6;i++){
+      const gx=_hash(i,9,509)*S,gy=_hash(i,10,510)*S,gr=5+_hash(i,11,511)*10;
+      const gg=tc.createRadialGradient(gx,gy,0,gx,gy,gr);
+      gg.addColorStop(0,'rgba(40,180,60,.12)');gg.addColorStop(1,'rgba(0,0,0,0)');
+      tc.fillStyle=gg;tc.fillRect(gx-gr,gy-gr,gr*2,gr*2);
+    }
+  });
+}
+// ── Swamp void — deep shadow with glowing fungal spores ──────────────────────
+function _buildSwampVoidPattern(){
+  return _makePattern(tc=>{
+    const S=_PS;
+    tc.fillStyle='#070b04';tc.fillRect(0,0,S,S);
+    _noiseLayer(tc,3,.5,'rgb(4,8,2)',53);
+    _noiseLayer(tc,8,.3,'rgb(15,20,6)',71);
+    // Glowing fungal spots
+    for(let i=0;i<12;i++){
+      const fx=_hash(i,0,600)*S,fy=_hash(i,1,601)*S,fr=4+_hash(i,2,602)*8;
+      const fg=tc.createRadialGradient(fx,fy,0,fx,fy,fr);
+      fg.addColorStop(0,'rgba(60,220,80,.55)');fg.addColorStop(.5,'rgba(20,120,40,.2)');fg.addColorStop(1,'rgba(0,0,0,0)');
+      tc.fillStyle=fg;tc.fillRect(fx-fr,fy-fr,fr*2,fr*2);
+    }
+    // Murky root lines
+    tc.lineWidth=.9;
+    for(let i=0;i<18;i++){
+      const rx=_hash(i,3,603)*S,ry=_hash(i,4,604)*S,rl=10+_hash(i,5,605)*22;
+      const ra=_hash(i,6,606)*Math.PI*2;
+      tc.strokeStyle=`rgba(10,18,4,${.55+_hash(i,7,607)*.3})`;
+      tc.beginPath();tc.moveTo(rx,ry);tc.bezierCurveTo(rx+Math.cos(ra)*rl*.4,ry+Math.sin(ra)*rl*.4,rx+Math.cos(ra+.6)*rl*.8,ry+Math.sin(ra+.6)*rl*.8,rx+Math.cos(ra+.3)*rl,ry+Math.sin(ra+.3)*rl);tc.stroke();
+    }
+  });
+}
+// ── Tundra ground — cracked pale ice with snow patches ───────────────────────
+function _buildTundraPattern(){
+  return _makePattern(tc=>{
+    const S=_PS;
+    tc.fillStyle='#c8d8e8';tc.fillRect(0,0,S,S);
+    _noiseLayer(tc,4,.2,'rgb(180,200,220)',83);
+    _noiseLayer(tc,9,.14,'rgb(255,255,255)',97);
+    _noiseLayer(tc,16,.1,'rgb(140,160,180)',113);
+    // Ice crack lines — thin sharp angular
+    tc.lineWidth=.7;
+    for(let i=0;i<24;i++){
+      const x1=_hash(i,0,700)*S,y1=_hash(i,1,701)*S;
+      const x2=x1+(_hash(i,2,702)-.5)*50,y2=y1+(_hash(i,3,703)-.5)*50;
+      tc.strokeStyle=`rgba(100,130,160,${.35+_hash(i,4,704)*.3})`;
+      tc.beginPath();tc.moveTo(x1,y1);tc.quadraticCurveTo(x1+(_hash(i,5,705)-.5)*12,y1+(_hash(i,6,706)-.5)*12,x2,y2);tc.stroke();
+    }
+    // Snow drift patches
+    for(let i=0;i<8;i++){
+      const sx=_hash(i,7,707)*S,sy=_hash(i,8,708)*S,sr=8+_hash(i,9,709)*18;
+      const sg=tc.createRadialGradient(sx,sy,0,sx,sy,sr);
+      sg.addColorStop(0,'rgba(255,255,255,.45)');sg.addColorStop(1,'rgba(255,255,255,0)');
+      tc.fillStyle=sg;tc.fillRect(sx-sr,sy-sr,sr*2,sr*2);
+    }
+    // Exposed dark rock patches
+    for(let i=0;i<6;i++){
+      const rx=_hash(i,10,710)*S,ry=_hash(i,11,711)*S,rr=4+_hash(i,12,712)*9;
+      const rg=tc.createRadialGradient(rx,ry,0,rx,ry,rr);
+      rg.addColorStop(0,'rgba(60,70,80,.55)');rg.addColorStop(1,'rgba(0,0,0,0)');
+      tc.fillStyle=rg;tc.fillRect(rx-rr,ry-rr,rr*2,rr*2);
+    }
+  });
+}
+// ── Tundra void — dark grey rock with snow ledges ────────────────────────────
+function _buildTundraVoidPattern(){
+  return _makePattern(tc=>{
+    const S=_PS;
+    tc.fillStyle='#1e2028';tc.fillRect(0,0,S,S);
+    _noiseLayer(tc,3,.45,'rgb(12,14,18)',83);
+    _noiseLayer(tc,7,.28,'rgb(30,35,44)',97);
+    // Snow accumulation patches (bright spots)
+    for(let i=0;i<14;i++){
+      const sx=_hash(i,0,800)*S,sy=_hash(i,1,801)*S,sr=5+_hash(i,2,802)*12;
+      const sg=tc.createRadialGradient(sx,sy,0,sx,sy,sr);
+      sg.addColorStop(0,'rgba(200,210,225,.35)');sg.addColorStop(1,'rgba(0,0,0,0)');
+      tc.fillStyle=sg;tc.fillRect(sx-sr,sy-sr,sr*2,sr*2);
+    }
+    // Angular rock face cracks
+    tc.lineWidth=1;
+    for(let i=0;i<16;i++){
+      const x1=_hash(i,3,803)*S,y1=_hash(i,4,804)*S;
+      const x2=x1+(_hash(i,5,805)-.5)*55,y2=y1+(_hash(i,6,806)-.5)*55;
+      tc.strokeStyle=`rgba(5,6,10,${.55+_hash(i,7,807)*.35})`;
+      tc.beginPath();tc.moveTo(x1,y1);tc.lineTo(x2,y2);tc.stroke();
+    }
+  });
+}
+
 function buildTextures(floor){
   const biome=getBiome(floor||1);
   TEX.biome=biome;
@@ -388,9 +523,15 @@ function buildTextures(floor){
   if(biome==='forest'){
     TEX.groundSrc=_buildGrassPattern();
     TEX.voidSrc=_buildUndergrowtPattern();
+  } else if(biome==='swamp'){
+    TEX.groundSrc=_buildSwampPattern();
+    TEX.voidSrc=_buildSwampVoidPattern();
   } else if(biome==='rocky'){
     TEX.groundSrc=_buildSandPattern();
     TEX.voidSrc=_buildRockyVoidPattern();
+  } else if(biome==='tundra'){
+    TEX.groundSrc=_buildTundraPattern();
+    TEX.voidSrc=_buildTundraVoidPattern();
   } else {
     TEX.groundSrc=_buildLavaRockPattern();
     TEX.voidSrc=_buildVolcanicVoidPattern();
@@ -1462,23 +1603,187 @@ class EnemyCharger extends Entity{
 }
 
 // ═══════════════════════════════════════════════
+// ENEMY — SHOOTER  (ranged, stays at distance, fires projectiles)
+// ═══════════════════════════════════════════════
+class EnemyShooter extends Entity{
+  constructor(x,y,floor){
+    const hp=20+floor*8;
+    super(x,y,24,24,hp);
+    this.spawnAnim=0;this.deathAnim=-1;this.contactCd=0;
+    this.spd=60+floor*3;this.shootCd=0;this.shootInt=clamp(2.0-floor*.05,.8,2.0);
+    this.prefDist=220+floor*5; // preferred distance from player
+    this.xpDrop=18+floor*4;this.dmg=6+floor;this.goldDrop=rnd(5,10)|0;
+    this.elite=false;this.bobT=rnd(0,7);
+  }
+  makeElite(){this.elite=true;this.hp*=2;this.maxHp*=2;this.spd*=1.3;this.dmg*=1.6;this.shootInt*=.65;this.xpDrop*=3;this.goldDrop*=4;}
+  onDeath(){
+    this.deathAnim=1;
+    pEmit(this.cx,this.cy,{n:14,spd:140,type:'spark',life:.38,sz:3,col:'#44ddff',glow:18,drag:.82});
+    spawnSW(this.cx,this.cy,'#22aaff',46);
+    spawnFloat(this.cx,this.cy-20,this.elite?'ELITE DOWN!':'SNIPED!',this.elite?'#ffdd00':'#44ddff',this.elite?17:14,this.elite?1.2:.9);
+  }
+  update(dt,target){
+    if(this.dead&&this.deathAnim>0){this.deathAnim=clamp(this.deathAnim-dt*4,0,1);return;}
+    if(this.spawnAnim<1)this.spawnAnim=clamp(this.spawnAnim+dt*5,0,1);
+    const eff=btFrozen>0?.08:getStatusSlow(this);
+    const dx=target.cx-this.cx,dy=target.cy-this.cy,l=Math.hypot(dx,dy)||1;
+    const nx=dx/l,ny=dy/l;
+    // Maintain preferred distance: retreat if too close, advance if too far
+    const dDiff=l-this.prefDist;
+    const str=clamp(Math.abs(dDiff)/80,0,1);
+    const dir=dDiff>0?1:-1;
+    this.vx=lerp(this.vx,nx*this.spd*str*dir*eff,dt*3);
+    this.vy=lerp(this.vy,ny*this.spd*str*dir*eff,dt*3);
+    this.move(dt);pushOutWalls(this,12);
+    this.angle=Math.atan2(dy,dx);this.bobT+=dt*2.5;
+    this.hitFlash=clamp(this.hitFlash-dt*5,0,1);
+    if(this.contactCd>0)this.contactCd-=dt;
+    tickStatus(this,dt);
+    // Shoot at player
+    this.shootCd-=dt;
+    if(this.shootCd<=0&&l<400){
+      this.shootCd=this.shootInt*rnd(.85,1.15);
+      const spread=this.elite?.12:.0;
+      const shots=this.elite?3:1;
+      for(let s=0;s<shots;s++){
+        const sAng=Math.atan2(dy,dx)+(s-(shots-1)/2)*spread;
+        G.bullets.push({x:this.cx,y:this.cy,vx:Math.cos(sAng)*320,vy:Math.sin(sAng)*320,dmg:this.dmg,dead:false,fromEnemy:true,life:2.2,col:'#44ddff'});
+      }
+      spawnSW(this.cx,this.cy,'#22aaff',20);
+    }
+  }
+  draw(){
+    if(this.dead&&this.deathAnim<=0)return;
+    const da=this.deathAnim>=0?this.deathAnim:1;
+    const pop=this.dead?da:(this.spawnAnim<1?Math.sin(this.spawnAnim*Math.PI*.5):1);
+    const bob=Math.sin(this.bobT)*2;
+    const hf=this.hitFlash;
+    ctx.save();ctx.translate(wx(this.cx),wy(this.cy)+bob);ctx.scale(pop,pop);ctx.globalAlpha=da;
+    // shadow
+    ctx.save();ctx.globalAlpha=.15*da;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(0,11,9,3,0,0,Math.PI*2);ctx.fill();ctx.restore();
+    // elite crown
+    if(this.elite){ctx.save();ctx.fillStyle='#ffdd00';ctx.shadowColor='#ffaa00';ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(-8,-18);ctx.lineTo(-4,-24);ctx.lineTo(0,-20);ctx.lineTo(4,-24);ctx.lineTo(8,-18);ctx.closePath();ctx.fill();ctx.restore();}
+    // body — hooded robe shape
+    const col=hf>.1?'#88eeff':'#2288aa';
+    ctx.fillStyle=col;ctx.shadowColor='#22aaff';ctx.shadowBlur=12;
+    ctx.beginPath();ctx.moveTo(0,-13);ctx.bezierCurveTo(9,-10,10,4,7,14);ctx.bezierCurveTo(2,16,-2,16,-7,14);ctx.bezierCurveTo(-10,4,-9,-10,0,-13);ctx.fill();
+    // hood
+    ctx.fillStyle=hf>.1?'#aaffff':'#115577';ctx.shadowBlur=5;
+    ctx.beginPath();ctx.arc(0,-11,7,0,Math.PI*2);ctx.fill();
+    // glowing eye
+    ctx.fillStyle='#44ffff';ctx.shadowColor='#44ffff';ctx.shadowBlur=10;
+    ctx.beginPath();ctx.ellipse(Math.cos(this.angle)*3,Math.sin(this.angle)*3-11,3,2,this.angle,0,Math.PI*2);ctx.fill();
+    // staff/wand aiming toward player
+    ctx.save();ctx.rotate(this.angle);
+    ctx.strokeStyle='#336688';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(14,0);ctx.stroke();
+    ctx.fillStyle='#44ffff';ctx.shadowColor='#44ffff';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(14,0,3.5,0,Math.PI*2);ctx.fill();
+    ctx.restore();ctx.restore();
+    if(!this.dead&&this.hp<this.maxHp){
+      const bw=this.elite?38:28,bh=3,bx=wx(this.cx)-bw/2,by=wy(this.y)-9;
+      ctx.fillStyle='#111';ctx.fillRect(bx,by,bw,bh);
+      ctx.fillStyle=this.elite?'#ffdd00':'#44ddff';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=4;
+      ctx.fillRect(bx,by,bw*(this.hp/this.maxHp),bh);ctx.shadowBlur=0;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// ENEMY — BRUTE  (slow tank, shockwave on contact, high HP)
+// ═══════════════════════════════════════════════
+class EnemyBrute extends Entity{
+  constructor(x,y,floor){
+    const hp=100+floor*22;
+    super(x,y,40,40,hp);
+    this.spawnAnim=0;this.deathAnim=-1;this.contactCd=0;
+    this.spd=38+floor*2;this.stomping=false;this.stompT=0;this.stompCd=0;
+    this.xpDrop=40+floor*8;this.dmg=28+floor*3;this.goldDrop=rnd(12,22)|0;
+    this.elite=false;this.shakeT=0;
+  }
+  makeElite(){this.elite=true;this.hp*=2;this.maxHp*=2;this.spd*=1.2;this.dmg*=1.5;this.xpDrop*=3;this.goldDrop*=4;this.w=50;this.h=50;}
+  onDeath(){
+    this.deathAnim=1;
+    pEmit(this.cx,this.cy,{n:32,spd:260,life:.55,sz:rnd(4,9),col:'#ff7722',glow:22,grav:90,drag:.85});
+    pEmit(this.cx,this.cy,{n:12,spd:300,type:'spark',life:.4,sz:5,col:'#ffcc44',glow:24,drag:.82});
+    spawnSW(this.cx,this.cy,'#ff6600',90);shake(.4);flash(255,100,0,.25);
+    spawnFloat(this.cx,this.cy-28,this.elite?'BRUTE FELLED!':'TIMBER!',this.elite?'#ffdd00':'#ff8833',this.elite?18:16,this.elite?1.4:1.1);
+  }
+  update(dt,target){
+    if(this.dead&&this.deathAnim>0){this.deathAnim=clamp(this.deathAnim-dt*2.5,0,1);return;}
+    if(this.spawnAnim<1)this.spawnAnim=clamp(this.spawnAnim+dt*3,0,1);
+    const eff=btFrozen>0?.08:getStatusSlow(this);
+    const dx=target.cx-this.cx,dy=target.cy-this.cy,l=Math.hypot(dx,dy)||1;
+    this.vx=lerp(this.vx,(dx/l)*this.spd*eff,dt*2);
+    this.vy=lerp(this.vy,(dy/l)*this.spd*eff,dt*2);
+    this.move(dt);pushOutWalls(this,20);
+    this.angle=Math.atan2(dy,dx);this.shakeT+=dt;
+    this.hitFlash=clamp(this.hitFlash-dt*4,0,1);
+    if(this.contactCd>0)this.contactCd-=dt;
+    if(this.stompCd>0)this.stompCd-=dt;
+    tickStatus(this,dt);
+    // Stomp AoE when player is within range and stompCd ready
+    if(l<100&&this.stompCd<=0&&!btFrozen){
+      this.stompCd=3.5;
+      spawnSW(this.cx,this.cy,'#ff6600',80);shake(.28);flash(255,120,0,.22);
+      pEmit(this.cx,this.cy,{n:18,spd:180,life:.4,sz:6,col:'#ff7700',glow:20,grav:60,drag:.83});
+      if(dist(target.cx,target.cy,this.cx,this.cy)<80&&target.invuln<=0){
+        target.hurt(this.dmg*.6);spawnFloat(target.cx,target.cy-28,'STOMP!','#ff8800',15,1.0);
+      }
+    }
+  }
+  draw(){
+    if(this.dead&&this.deathAnim<=0)return;
+    const da=this.deathAnim>=0?this.deathAnim:1;
+    const pop=this.dead?da:(this.spawnAnim<1?this.spawnAnim:1);
+    const hf=this.hitFlash;
+    const wobX=Math.sin(this.shakeT*8)*(this.stompCd>3?2:0);
+    ctx.save();ctx.translate(wx(this.cx)+wobX,wy(this.cy));ctx.scale(pop,pop);ctx.globalAlpha=da;
+    // shadow
+    ctx.save();ctx.globalAlpha=.22*da;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(0,18+(this.elite?5:0),16+(this.elite?5:0),5,0,0,Math.PI*2);ctx.fill();ctx.restore();
+    const col=hf>.1?'#ffcc66':'#885522';const r=this.elite?22:18;
+    // body — hunched blocky shape
+    ctx.fillStyle=col;ctx.shadowColor=hf>.1?'#ff8800':'#aa5500';ctx.shadowBlur=16;
+    ctx.beginPath();ctx.moveTo(0,-r*1.1);ctx.bezierCurveTo(r*1.2,-r*.8,r*1.3,r*.6,r*.8,r*1.1);ctx.bezierCurveTo(r*.3,r*1.3,-r*.3,r*1.3,-r*.8,r*1.1);ctx.bezierCurveTo(-r*1.3,r*.6,-r*1.2,-r*.8,0,-r*1.1);ctx.fill();
+    // inner dark core
+    ctx.fillStyle=hf>.1?'#aa6600':'#441100';ctx.shadowBlur=3;
+    ctx.beginPath();ctx.moveTo(0,-r*.6);ctx.bezierCurveTo(r*.7,-r*.4,r*.7,r*.4,0,r*.65);ctx.bezierCurveTo(-r*.7,r*.4,-r*.7,-r*.4,0,-r*.6);ctx.fill();
+    // elite spikes
+    if(this.elite){ctx.save();ctx.fillStyle='#ffdd00';ctx.shadowColor='#ffaa00';ctx.shadowBlur=10;for(let i=0;i<6;i++){const a=i*Math.PI/3;ctx.beginPath();ctx.moveTo(Math.cos(a)*r*.9,Math.sin(a)*r*.9);ctx.lineTo(Math.cos(a)*(r+10),Math.sin(a)*(r+10));ctx.lineTo(Math.cos(a+.15)*(r*.9),Math.sin(a+.15)*(r*.9));ctx.closePath();ctx.fill();}ctx.restore();}
+    // eyes
+    const ea=this.angle;
+    for(const ex of[-5,5]){
+      ctx.fillStyle='#ff4400';ctx.shadowColor='#ff3300';ctx.shadowBlur=10;ctx.beginPath();ctx.arc(ex+Math.cos(ea)*4,Math.sin(ea)*4-4,3.5,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#111';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(ex+Math.cos(ea)*5,Math.sin(ea)*5-4,1.8,0,Math.PI*2);ctx.fill();
+    }
+    ctx.restore();
+    if(!this.dead&&this.hp<this.maxHp){
+      const bw=this.elite?52:42,bh=this.elite?5:4,bx=wx(this.cx)-bw/2,by=wy(this.y)-13;
+      ctx.fillStyle='#111';ctx.fillRect(bx,by,bw,bh);
+      ctx.fillStyle=this.elite?'#ffdd00':'#ff7722';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=5;
+      ctx.fillRect(bx,by,bw*(this.hp/this.maxHp),bh);ctx.shadowBlur=0;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
 // BOSS
 // ═══════════════════════════════════════════════
 class Boss extends Entity{
   constructor(floor){
-    const hp=350+floor*100;
+    const hp=500+floor*140; // more HP per floor
     super(W/2-36,55,72,72,hp);
     this.floor=floor;this.spawnAnim=0;this.deathAnim=-1;
-    this.spd=50+floor*4;this.contactCd=0;this.dmg=22+floor*4;
-    this.shootCd=0;this.shootInt=clamp(1.4-floor*.07,.45,1.4);
-    this.xpDrop=160+floor*40;this.goldDrop=rnd(40,80)|0;
+    this.spd=60+floor*5;this.contactCd=0;this.dmg=26+floor*5;
+    this.shootCd=0;this.shootInt=clamp(1.2-floor*.06,.32,1.2);
+    this.xpDrop=200+floor*50;this.goldDrop=rnd(55,100)|0;
     this.angle=Math.PI/2;this.orbitAngle=0;this.bullets=[];
     this.shieldAng=0;
-    this.shieldHp=floor>=8?3:floor>=4?2:0;
+    this.shieldHp=floor>=6?3:floor>=3?2:floor>=1?1:0; // shields from floor 1
     this.shieldMax=this.shieldHp;
-    this.enrageHp=hp*.3;this.enraged=false;
-    this.phase=1;// boss has 3 phases
+    this.enraged=false;
+    this.phase=1; // 3 phases: transitions at 70% and 45%
     this.phaseT=0;
+    this.spiralT=0; // spiral attack accumulator
+    this.dashCd=0;  // dash charge attack
   }
   onDeath(){
     this.deathAnim=1;
@@ -1492,32 +1797,60 @@ class Boss extends Entity{
   update(dt,target){
     if(this.spawnAnim<1)this.spawnAnim=clamp(this.spawnAnim+dt*2,0,1);
     if(this.deathAnim>0){this.deathAnim=clamp(this.deathAnim-dt*1.2,0,1);for(const b of this.bullets)b.dead=true;return;}
-    // phase transitions
+    // phase transitions — earlier to keep pressure on
     const hpFrac=this.hp/this.maxHp;
-    if(this.phase<2&&hpFrac<.6){this.phase=2;flash(255,100,0,.3);shake(.35);spawnFloat(this.cx,this.cy-40,'PHASE 2','#ff8800',18,1.4);}
-    if(this.phase<3&&hpFrac<.3){this.phase=3;this.enraged=true;this.spd*=1.6;this.shootInt*=.5;flash(255,0,0,.4);shake(.5);spawnFloat(this.cx,this.cy-40,'ENRAGED!','#ff2200',20,1.5);}
-    this.phaseT+=dt;this.shieldAng+=dt*(this.enraged?2.5:1.3);this.orbitAngle+=dt*.35;
+    if(this.phase<2&&hpFrac<.70){
+      this.phase=2;this.spd*=1.25;this.shootInt*=.78;
+      flash(255,100,0,.35);shake(.42);spawnFloat(this.cx,this.cy-40,'PHASE 2','#ff8800',18,1.4);
+      // Restore 1 shield on transition
+      if(this.shieldMax>0)this.shieldHp=Math.min(this.shieldMax,this.shieldHp+1);
+    }
+    if(this.phase<3&&hpFrac<.40){
+      this.phase=3;this.enraged=true;this.spd*=1.5;this.shootInt*=.55;
+      flash(255,0,0,.5);shake(.65);spawnFloat(this.cx,this.cy-40,'ENRAGED!','#ff2200',22,1.8);
+      if(this.shieldMax>0)this.shieldHp=this.shieldMax; // fully restore shields at phase 3
+    }
+    this.phaseT+=dt;this.spiralT+=dt;this.shieldAng+=dt*(this.enraged?3.0:1.5);this.orbitAngle+=dt*.4;
+    if(this.dashCd>0)this.dashCd-=dt;
     const eff=btFrozen>0?.08:1;
     const dx=target.cx-this.cx,dy=target.cy-this.cy,l=Math.hypot(dx,dy)||1;
-    const chase=.55+Math.sin(this.phaseT*.4)*.35;
-    this.vx=lerp(this.vx,(dx/l)*this.spd*chase*eff+Math.cos(this.orbitAngle)*(50+this.phase*10)*eff,dt*2);
-    this.vy=lerp(this.vy,(dy/l)*this.spd*chase*eff+Math.sin(this.orbitAngle)*(50+this.phase*10)*eff,dt*2);
+
+    // Phase 2+: dash charge at player periodically
+    if(this.phase>=2&&this.dashCd<=0&&l<350&&!this.dashing){
+      this.dashing=true;this.dashCd=4.0-this.phase*.5;
+      this.dashVx=(dx/l)*(500+this.floor*15);this.dashVy=(dy/l)*(500+this.floor*15);
+      spawnSW(this.cx,this.cy,'#ff4400',55);flash(255,80,0,.18);
+    }
+    if(this.dashing){
+      this.vx=lerp(this.vx,this.dashVx,dt*12);this.vy=lerp(this.vy,this.dashVy,dt*12);
+      if(Math.hypot(this.vx,this.vy)<80)this.dashing=false;
+    } else {
+      const chase=.6+Math.sin(this.phaseT*.5)*.3;
+      this.vx=lerp(this.vx,(dx/l)*this.spd*chase*eff+Math.cos(this.orbitAngle)*(55+this.phase*12)*eff,dt*2.5);
+      this.vy=lerp(this.vy,(dy/l)*this.spd*chase*eff+Math.sin(this.orbitAngle)*(55+this.phase*12)*eff,dt*2.5);
+    }
     this.move(dt);pushOutWalls(this,22);this.x=clamp(this.x,18,WORLD_W-this.w-18);this.y=clamp(this.y,18,WORLD_H-this.h-18);
     this.angle=Math.atan2(dy,dx);this.hitFlash=clamp(this.hitFlash-dt*3.5,0,1);
     if(this.contactCd>0)this.contactCd-=dt;
+
     // shooting by phase
     this.shootCd-=dt;
     if(this.shootCd<=0){
       this.shootCd=this.shootInt;
       const ang=Math.atan2(target.cy-this.cy,target.cx-this.cx);
       if(this.phase===1){
+        // Single aimed + offset pair
         this.bullets.push(new BossBullet(this.cx,this.cy,ang,this.floor));
+        if(this.floor>=3){for(let i=-1;i<=1;i+=2)this.bullets.push(new BossBullet(this.cx,this.cy,ang+i*.22,this.floor));}
       } else if(this.phase===2){
-        for(let i=-1;i<=1;i++)this.bullets.push(new BossBullet(this.cx,this.cy,ang+i*.3,this.floor));
+        // 3-way spread + spiral burst
+        for(let i=-2;i<=2;i++)this.bullets.push(new BossBullet(this.cx,this.cy,ang+i*.22,this.floor));
+        // Alternating spiral volley
+        for(let i=0;i<6;i++)this.bullets.push(new BossBullet(this.cx,this.cy,this.spiralT*1.8+i*(Math.PI/3),this.floor));
       } else {
-        // phase 3: ring + aimed
-        for(let i=0;i<8;i++)this.bullets.push(new BossBullet(this.cx,this.cy,i*Math.PI/4+this.phaseT*.5,this.floor));
-        this.bullets.push(new BossBullet(this.cx,this.cy,ang,this.floor));
+        // Phase 3: full ring + spiral + aimed
+        for(let i=0;i<12;i++)this.bullets.push(new BossBullet(this.cx,this.cy,i*(Math.PI/6)+this.spiralT*2.5,this.floor));
+        for(let i=-1;i<=1;i++)this.bullets.push(new BossBullet(this.cx,this.cy,ang+i*.18,this.floor));
       }
       spawnSW(this.cx,this.cy,'#ff2200',36);
     }
@@ -1599,14 +1932,25 @@ class XpOrb{
     this.r=val>=40?7:val>=20?5.5:4;
   }
   update(dt,player){
-    this.t+=dt;this.vx*=.91;this.vy+=110*dt;this.vy*=.91;
-    this.x+=this.vx*dt;this.y+=this.vy*dt;
+    this.t+=dt;
+    if(this.t>60){this.dead=true;return;}
+    if(this.t<0.9){
+      this.vx*=.91;this.vy+=110*dt;this.vy*=.91;
+      this.x+=this.vx*dt;this.y+=this.vy*dt;
+    }
     const d=dist(this.x,this.y,player.cx,player.cy);
     const pullR=player.magnetRange||100;
-    if(d<pullR){const a=angle(this.x,this.y,player.cx,player.cy);const pull=lerp(60,600,(pullR-d)/pullR);this.vx+=Math.cos(a)*pull*dt*8;this.vy+=Math.sin(a)*pull*dt*8;}
+    if(d<pullR){
+      const a=angle(this.x,this.y,player.cx,player.cy);
+      const pull=lerp(60,600,(pullR-d)/pullR);
+      this.vx+=Math.cos(a)*pull*dt*8;this.vy+=Math.sin(a)*pull*dt*8;
+      this.x+=this.vx*dt;this.y+=this.vy*dt;
+    }
     if(d<15)this.dead=true;
   }
   draw(){
+    if(this.dead)return;
+    if(this.t>56&&Math.floor(this.t*6)%2===0)return;
     const pulse=1+Math.sin(this.t*6)*.12;
     ctx.save();ctx.translate(wx(this.x),wy(this.y));ctx.scale(pulse,pulse);
     ctx.shadowColor=this.col;ctx.shadowBlur=14;ctx.fillStyle=this.col;ctx.globalAlpha=.9;
@@ -1619,14 +1963,20 @@ class XpOrb{
 class GoldCoin{
   constructor(x,y,val){
     this.x=x;this.y=y;this.vx=rnd(-50,50);this.vy=rnd(-80,-10);
-    this.val=val;this.dead=false;this.t=0;
+    this.val=val;this.dead=false;this.t=0;this.pickedUp=false;
   }
   update(dt,player){
-    this.t+=dt;this.vx*=.88;this.vy+=120*dt;this.vy*=.88;
-    this.x+=this.vx*dt;this.y+=this.vy*dt;
-    if(dist(this.x,this.y,player.cx,player.cy)<18)this.dead=true;
+    this.t+=dt;
+    if(this.t>60){this.dead=true;return;}
+    if(this.t<0.9){
+      this.vx*=.88;this.vy+=120*dt;this.vy*=.88;
+      this.x+=this.vx*dt;this.y+=this.vy*dt;
+    }
+    if(dist(this.x,this.y,player.cx,player.cy)<18){this.dead=true;this.pickedUp=true;}
   }
   draw(){
+    if(this.dead)return;
+    if(this.t>56&&Math.floor(this.t*6)%2===0)return;
     const bob=Math.sin(this.t*5)*.8;
     ctx.save();ctx.translate(wx(this.x),wy(this.y)+bob);
     ctx.shadowColor='#ffcc00';ctx.shadowBlur=10;
@@ -1637,12 +1987,16 @@ class GoldCoin{
 }
 
 class HealthPack{
-  constructor(x,y){this.x=x;this.y=y;this.dead=false;this.t=0;this.heal=40;}
+  constructor(x,y){this.x=x;this.y=y;this.dead=false;this.t=0;this.heal=40;this.pickedUp=false;}
   update(dt,player){
     this.t+=dt;
-    if(dist(this.x,this.y,player.cx,player.cy)<20)this.dead=true;
+    if(this.t>20){this.dead=true;return;} // expire — pickedUp stays false so no free heal
+    if(dist(this.x,this.y,player.cx,player.cy)<20){this.dead=true;this.pickedUp=true;}
   }
   draw(){
+    if(this.dead)return;
+    // Blink in the last 4 seconds as a despawn warning — no alpha/shadow changes
+    if(this.t>16&&Math.floor(this.t*6)%2===0)return;
     const bob=Math.sin(this.t*3)*3;
     ctx.save();ctx.translate(wx(this.x),wy(this.y)+bob);
     ctx.shadowColor='#ff4466';ctx.shadowBlur=16+Math.sin(this.t*3)*4;
@@ -1654,8 +2008,15 @@ class HealthPack{
 
 class WeaponDrop{
   constructor(x,y,key){this.x=x;this.y=y;this.key=key;this.w=WEAPONS[key];this.dead=false;this.t=0;}
-  update(dt,player){this.t+=dt;if(dist(this.x,this.y,player.cx,player.cy)<22)this.dead=true;}
+  update(dt,player){
+    this.t+=dt;
+    if(this.t>20)this.dead=true;
+    if(dist(this.x,this.y,player.cx,player.cy)<22)this.dead=true;
+  }
   draw(){
+    if(this.dead)return;
+    // Blink in the last 4 seconds as a despawn warning
+    if(this.t>16&&Math.floor(this.t*6)%2===0)return;
     const bob=Math.sin(this.t*3)*4;
     ctx.save();ctx.translate(wx(this.x),wy(this.y)+bob);
     ctx.shadowColor=this.w.glow;ctx.shadowBlur=18+Math.sin(this.t*4)*4;
@@ -1708,12 +2069,14 @@ class ShopNPC{
   constructor(x,y){this.x=x;this.y=y;this.t=0;this.active=false;}
   update(dt,player){
     this.t+=dt;
-    if(dist(this.x,this.y,player.cx,player.cy)<35&&ePressed&&!G.shopOpen){
+    if(dist(this.x,this.y,player.cx,player.cy)<35&&ePressed&&!G.shopOpen&&!G.shopLocked){
       G.shopOpen=true;G.paused=true;
-      G.shopItems=rollShop();
+      // Items are rolled once per floor (in initGame/nextFloor); don't re-roll here
       G.shopOpenTimer=0;
-      ePressed=false; // consume so close handler doesn't fire same frame
+      ePressed=false;
     }
+    // Show "CLOSED" label when locked
+    this.locked=G.shopLocked;
   }
   draw(){
     const bob=Math.sin(this.t*2)*3;
@@ -1729,8 +2092,12 @@ class ShopNPC{
     // eyes
     ctx.fillStyle='#442200';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(-3,-8,1.5,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(3,-8,1.5,0,Math.PI*2);ctx.fill();
     // "SHOP" label
-    ctx.font='bold 9px monospace';ctx.fillStyle='#ffdd44';ctx.shadowColor='#ffaa00';ctx.shadowBlur=8;
-    ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText('[E] SHOP',0,-32);
+    ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+    if(this.locked){
+      ctx.fillStyle='#884422';ctx.shadowColor='#aa3300';ctx.shadowBlur=6;ctx.fillText('CLOSED',0,-32);
+    } else {
+      ctx.fillStyle='#ffdd44';ctx.shadowColor='#ffaa00';ctx.shadowBlur=8;ctx.fillText('[E] SHOP',0,-32);
+    }
     ctx.restore();
   }
 }
@@ -1863,7 +2230,7 @@ function drawObstacles(){
 function drawMinimap(){
   if(!G.mapData)return;
   const m=G.mapData, T=m.TILE;
-  const mmW=160,mmH=120,mmX=W-mmW-12,mmY=H-mmH-12;
+  const mmW=160,mmH=120,mmX=W-mmW-12,mmY=96; // top-right, below score/floor text
   const scX=mmW/WORLD_W, scY=mmH/WORLD_H;
 
   ctx.save();
@@ -1930,6 +2297,41 @@ function drawMinimap(){
   ctx.restore();
 }
 
+function drawExitPortalArrow(){
+  // Screen-edge arrow pointing toward the exit portal when it's off-screen
+  const ep=G.exitPortal;
+  if(!ep||onScreenPt(ep.x,ep.y,80))return;
+  const pulse=Math.sin(NOW*4)*.3+.7;
+  // Direction from player world position to portal world position — camera-independent
+  const a=Math.atan2(ep.y-G.player.cy, ep.x-G.player.cx);
+  // Player's screen position
+  const psx=wx(G.player.cx), psy=wy(G.player.cy);
+  // Walk outward from the player's screen pos until we hit the screen edge
+  const M2=36;
+  const cos=Math.cos(a), sin=Math.sin(a);
+  // Max steps to each edge from player screen pos
+  const tRight =(W-M2-psx)/cos; const tLeft  =(M2-psx)/cos;
+  const tBottom=(H-M2-psy)/sin; const tTop   =(M2-psy)/sin;
+  const candidates=[tRight,tLeft,tBottom,tTop].filter(v=>v>0);
+  const t=candidates.length?Math.min(...candidates):100;
+  const ex=clamp(psx+cos*t, M2, W-M2);
+  const ey=clamp(psy+sin*t, M2, H-M2);
+  ctx.save();
+  ctx.translate(ex,ey);ctx.rotate(a);
+  ctx.globalAlpha=pulse*0.9;
+  // Arrow body
+  ctx.fillStyle='#44ffaa';ctx.shadowColor='#44ffaa';ctx.shadowBlur=14;
+  ctx.beginPath();
+  ctx.moveTo(16,0);ctx.lineTo(-8,-8);ctx.lineTo(-4,0);ctx.lineTo(-8,8);ctx.closePath();
+  ctx.fill();
+  // Distance label
+  ctx.rotate(-a);
+  const d=Math.round(Math.hypot(ep.x-G.player.cx,ep.y-G.player.cy));
+  ctx.font='bold 8px monospace';ctx.fillStyle='#44ffaa';ctx.shadowBlur=6;
+  ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(`EXIT ${d}`,0,14);
+  ctx.restore();
+}
+
 function drawExitPortal(){
   const ep=G.exitPortal;
   if(!ep||!onScreenPt(ep.x,ep.y,80))return;
@@ -1966,20 +2368,20 @@ function drawExitPortal(){
 function drawHUD(){
   const p=G.player;
   // ── Left panel: stack from bottom up, fixed slots ──────────
-  const LX=12, BW=210; // left x, bar width
-  // Row positions from bottom
+  const LX=12, BW=220; // left x, bar width
+  // Row positions (Y coordinate of element top or reference point)
   const ROW={
-    xp:    H-14,   // xp bar (very bottom)
-    hp:    H-38,   // hp bar
-    gold:  H-56,   // gold + dash label
-    dash:  H-66,   // dash bar
-    pips:  H-80,   // overload/soul pips
-    passiveIcons: H-14, // right side
+    xp:    H-12,   // xp bar bottom edge
+    hp:    H-34,   // hp bar bottom edge (bar is 20px tall → occupies H-54..H-34)
+    gold:  H-62,   // gold text (textBaseline bottom) — well clear of HP bar
+    dash:  H-72,   // dash bar top
+    pips:  H-88,   // overload/soul pips centre
+    passiveIcons: H-14,
   };
   const bh=20;
 
-  // HP bar
-  const hx=LX, hy=ROW.hp-bh+4, bw=BW;
+  // HP bar — ROW.hp is the bottom edge; bar grows upward from there
+  const hx=LX, hy=ROW.hp-bh, bw=BW;
   ctx.fillStyle='rgba(0,0,0,.72)';ctx.beginPath();ctx.roundRect(hx-3,hy-3,bw+6,bh+6,5);ctx.fill();
   const hf=clamp(p.hp/p.maxHp,0,1);
   const hc=hf>.5?'hsl(130,70%,48%)':hf>.25?'hsl(40,90%,50%)':'hsl(0,80%,50%)';
@@ -1997,7 +2399,7 @@ function drawHUD(){
     ctx.restore();
   }
 
-  // XP bar
+  // XP bar — sits just above the very bottom edge
   const xy=ROW.xp-7, xbh=7;
   ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(hx,xy,bw,xbh);
   const xg=ctx.createLinearGradient(hx,xy,hx+bw,xy);xg.addColorStop(0,'#44aaff');xg.addColorStop(1,'#aa44ff');
@@ -2069,12 +2471,14 @@ function drawHUD(){
   const wc=['#ffdd44','#ff8833','#ff4444','#ff44ff'][Math.min(3,Math.floor((G.floor-1)/3))];
   ctx.font='bold 12px monospace';ctx.fillStyle=wc;ctx.shadowColor=wc;ctx.shadowBlur=9;ctx.fillText(`FLOOR ${G.floor}`,W-14,56);ctx.shadowBlur=0;
   ctx.font='10px monospace';ctx.fillStyle='#3a4466';ctx.fillText(`Wave ${G.wave}  ${G.kills} kills`,W-14,72);
-  // Weapon
+  // Weapon + passive icons — bottom-right, minimap is now top-right so no overlap
   const wep=p.weapon;
-  ctx.font='bold 11px monospace';ctx.fillStyle=wep.col;ctx.shadowColor=wep.glow;ctx.shadowBlur=7;
-  ctx.textBaseline='bottom';ctx.fillText(`⚡ ${wep.name}`,W-14,H-52);ctx.shadowBlur=0;
-  ctx.font='9px monospace';ctx.fillStyle='rgba(255,255,255,.28)';ctx.fillText(wep.desc,W-14,H-38);
-  // Passive icons (row above weapon)
+  ctx.font='bold 12px monospace';ctx.fillStyle=wep.col;ctx.shadowColor=wep.glow;ctx.shadowBlur=8;
+  ctx.textAlign='right';ctx.textBaseline='bottom';
+  ctx.fillText(`⚡ ${wep.name}`,W-14,H-34);ctx.shadowBlur=0;
+  ctx.font='9px monospace';ctx.fillStyle='rgba(255,255,255,.30)';
+  ctx.fillText(wep.desc,W-14,H-20);
+  // Passive icons above weapon
   const pass=[];
   if(p.explosive)pass.push({i:'💥',c:'#ff8800'});if(p.pierce)pass.push({i:'⟿',c:'#cc88ff'});
   if(p.chainLightning)pass.push({i:'⚡',c:'#88ffff'});if(p.reaper)pass.push({i:'☠',c:'#ff00aa'});
@@ -2086,9 +2490,9 @@ function drawHUD(){
   if(p.bulletTime)pass.push({i:'⏸',c:'#88ddff'});
   if(pass.length){
     ctx.textAlign='right';ctx.textBaseline='bottom';ctx.font='13px monospace';
-    for(let i=0;i<Math.min(pass.length,10);i++){
+    for(let i=0;i<Math.min(pass.length,12);i++){
       ctx.fillStyle=pass[i].c;ctx.shadowColor=pass[i].c;ctx.shadowBlur=5;
-      ctx.fillText(pass[i].i,W-14-i*22,H-22);ctx.shadowBlur=0;
+      ctx.fillText(pass[i].i,W-14-i*22,H-52);ctx.shadowBlur=0;
     }
   }
 
@@ -2098,15 +2502,15 @@ function drawHUD(){
     const ca=clamp(comboTimer/comboWin,0,1);
     ctx.textAlign='center';const cs=Math.min(combo,10);
     ctx.font=`bold ${12+cs}px monospace`;ctx.fillStyle=`hsl(${cs*18},100%,60%)`;ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=13;
-    ctx.globalAlpha=ca;ctx.textBaseline='bottom';ctx.fillText(`${combo}× COMBO`,W/2,H-18);ctx.globalAlpha=1;ctx.shadowBlur=0;
-    ctx.fillStyle=`hsla(${cs*18},80%,50%,.25)`;ctx.fillRect(W/2-55,H-12,110*ca,4);
+    ctx.globalAlpha=ca;ctx.textBaseline='bottom';ctx.fillText(`${combo}× COMBO`,W/2,H-10);ctx.globalAlpha=1;ctx.shadowBlur=0;
+    ctx.fillStyle=`hsla(${cs*18},80%,50%,.25)`;ctx.fillRect(W/2-55,H-5,110*ca,4);
   }
 
   // ── Top indicators ─────────────────────────────────────────
   const liveCount=G.enemies.filter(e=>!e.dead).length;
   // Floor / Wave / Enemy counter (top-right area, left of minimap)
   {
-    const isBossWave=G.wave%3===0&&G.wave>0;
+    const isBossWave=G.wave%6===0&&G.wave>0;
     ctx.textAlign='right';ctx.textBaseline='top';ctx.font='bold 11px monospace';
     ctx.fillStyle='rgba(200,190,230,.8)';ctx.shadowBlur=0;
     ctx.fillText(`FLOOR ${G.floor}`,W-180,8);
@@ -2137,7 +2541,7 @@ function drawHUD(){
   }
   // Grace countdown
   if(G.inGrace&&G.wave>0){
-    const nextIsBoss=(G.wave+1)%3===0;
+    const nextIsBoss=(G.wave+1)%6===0;
     const msg=nextIsBoss?`⚠ BOSS incoming in ${Math.ceil(G.graceTimer)}s`:`Next wave in ${Math.ceil(G.graceTimer)}s`;
     ctx.textAlign='center';ctx.textBaseline='top';ctx.font='11px monospace';
     ctx.fillStyle=nextIsBoss?'rgba(255,160,60,.8)':'rgba(140,255,140,.5)';
@@ -2336,7 +2740,7 @@ function tickAmbientDust(dt){
     }
     if(!onScreenPt(d.x,d.y,10))continue;
     const a=d.a*Math.min(1,d.life,.5)*2;
-    const dustCol=(TEX.biome==='volcanic')?'#cc6622':(TEX.biome==='rocky')?'#c8a860':'#88bb44';
+    const dustCol=(TEX.biome==='volcanic')?'#cc6622':(TEX.biome==='tundra')?'#aaccee':(TEX.biome==='swamp')?'#44aa44':(TEX.biome==='rocky')?'#c8a860':'#88bb44';
     ctx.globalAlpha=a; ctx.fillStyle=dustCol;
     ctx.beginPath(); ctx.arc(d.x,d.y,d.sz,0,Math.PI*2); ctx.fill();
   }
@@ -2470,73 +2874,60 @@ function drawWorld(){
 
   const wf=Math.floor(NOW*2)%2;
 
-  // ── Strategy: draw both textures as full-viewport seamless fills ───────────
-  // Void first (full viewport), then ground clipped to floor tiles only.
-  // Using a clip path means the ground texture is painted in ONE pass with no
-  // per-tile boundaries — the clip just masks which pixels are visible.
-
-  // 1. Full-viewport void (no seams — single fill)
+  // 1. Full-viewport void
   drawSeamless(TEX.voidSrc,CAM.x,CAM.y,W,H);
 
-  // 2. Build clip path from all visible floor tiles, then paint ground once
+  // 2. Clip to floor tiles and fill ground texture
   ctx.save();
   ctx.beginPath();
   for(let ty=ty0;ty<ty1;ty++){
     for(let tx=tx0;tx<tx1;tx++){
-      if(m.grid[ty*m.COLS+tx]===1){
-        ctx.rect(tx*T,ty*T,T,T);
-      }
+      if(m.grid[ty*m.COLS+tx]===1)ctx.rect(tx*T,ty*T,T,T);
     }
   }
   ctx.clip();
-  // Single seamless ground fill — clipped to floor shape, zero tile seams
   drawSeamless(TEX.groundSrc,CAM.x,CAM.y,W,H);
   ctx.restore();
 
-  // 3. Water/lava tiles (tile-sized but animated, acceptable)
+  // 3. Water/lava tiles
   for(let ty=ty0;ty<ty1;ty++){
     for(let tx=tx0;tx<tx1;tx++){
       const tile=m.grid[ty*m.COLS+tx];
-      if(tile===2||tile===3){
-        ctx.drawImage(TEX.water[wf],tx*T,ty*T,T,T);
-      }
+      if(tile===2||tile===3)ctx.drawImage(TEX.water[wf],tx*T,ty*T,T,T);
     }
   }
 
-  // ── 3. Edge-blend: single blurred shadow pass ─────────────────────────────
-  // Build the void shape as one Path2D, then draw it with shadowBlur so the
-  // shadow bleeds organically onto the ground. No rectangles, no tile grid.
-  const shadowCol=biome==='volcanic'?'rgba(4,1,0,0.92)':biome==='rocky'?'rgba(8,5,1,0.92)':'rgba(2,7,0,0.92)';
-  const blurAmount=T*1.1; // how far the shadow bleeds into walkable ground
-
-  ctx.save();
-  ctx.shadowColor=shadowCol;
-  ctx.shadowBlur=blurAmount;
-  ctx.fillStyle=shadowCol;
-
-  // Clip to only the floor area so the shadow never paints into the void itself
-  ctx.beginPath();
-  for(let ty=ty0;ty<ty1;ty++){
-    for(let tx=tx0;tx<tx1;tx++){
-      if(m.grid[ty*m.COLS+tx]===1){
-        ctx.rect(tx*T,ty*T,T,T);
+  // ── Edge darkening: per-boundary-tile radial gradient darkening ───────────
+  // For every floor tile that borders at least one void tile, draw a small
+  // radial gradient darkening spot on the void-facing edge(s).  This replaces
+  // the shadowBlur approach (which left square halos) with smooth per-edge
+  // gradients that feather softly into the ground — no hard edges, no halos.
+  const edgeDark=biome==='volcanic'?'rgba(8,2,0,':biome==='tundra'?'rgba(0,2,8,':biome==='rocky'?'rgba(2,2,0,':biome==='swamp'?'rgba(0,6,0,':'rgba(0,4,0,';
+  const edgeR=T*1.5; // how far the darkening fades into the floor
+  for(let ty=ty0-1;ty<ty1+1;ty++){
+    for(let tx=tx0-1;tx<tx1+1;tx++){
+      if(m.grid[ty*m.COLS+tx]!==1)continue;
+      const wx=tx*T, wy=ty*T;
+      // Check each of the 4 cardinal neighbours; if void, paint a gradient from that edge in
+      const neighbours=[
+        [tx,ty-1, wx+T/2,wy,       wx+T/2,wy+edgeR],   // top void → darken downward
+        [tx,ty+1, wx+T/2,wy+T,     wx+T/2,wy+T-edgeR],  // bottom void → darken upward
+        [tx-1,ty, wx,    wy+T/2,   wx+edgeR,wy+T/2],    // left void → darken rightward
+        [tx+1,ty, wx+T,  wy+T/2,   wx+T-edgeR,wy+T/2],  // right void → darken leftward
+      ];
+      for(const[ntx,nty,gx0,gy0,gx1,gy1] of neighbours){
+        const inBounds=ntx>=0&&nty>=0&&ntx<m.COLS&&nty<m.ROWS;
+        const isVoid=!inBounds||m.grid[nty*m.COLS+ntx]===0;
+        if(!isVoid)continue;
+        const grd=ctx.createLinearGradient(gx0,gy0,gx1,gy1);
+        grd.addColorStop(0,edgeDark+'0.72)');
+        grd.addColorStop(0.5,edgeDark+'0.28)');
+        grd.addColorStop(1,edgeDark+'0)');
+        ctx.fillStyle=grd;
+        ctx.fillRect(wx,wy,T,T);
       }
     }
   }
-  ctx.clip();
-
-  // Draw the void tiles as filled rectangles — shadow bleeds outward from them
-  // onto the clipped (floor-only) region
-  ctx.beginPath();
-  for(let ty=ty0-2;ty<ty1+2;ty++){
-    for(let tx=tx0-2;tx<tx1+2;tx++){
-      if(isSolid(tx,ty)){
-        ctx.rect(tx*T,ty*T,T,T);
-      }
-    }
-  }
-  ctx.fill();
-  ctx.restore();
 
   // ── 4. Trees ──────────────────────────────────────────────────────────────
   drawTrees(m.trees);
@@ -2603,29 +2994,33 @@ function generateMap(floor, seed){
   const biome=getBiome(floor);
 
   // ── TREE / TERRAIN CLUSTERS ───────────────────────────────────────────────
-  // Scatter many organic blob clusters across the world — these are the "walls"
   const numClusters=28+floor*3;
   for(let i=0;i<numClusters;i++){
     const cx=ri(3,COLS-4),cy=ri(3,ROWS-4);
     if(biome==='forest'){
-      // Large irregular tree groves
       carveBlob(cx,cy,ri(18,40));
-      // Sometimes a second blob adjacent for larger forest patches
       if(rand()<.4)carveBlob(cx+ri(-4,4),cy+ri(-4,4),ri(10,22));
+    } else if(biome==='swamp'){
+      // Swamp: dense irregular blobs — narrow winding paths
+      carveBlob(cx,cy,ri(22,45));
+      if(rand()<.55)carveBlob(cx+ri(-5,5),cy+ri(-5,5),ri(12,25));
     } else if(biome==='rocky'){
-      // Medium rocky outcrops — more elliptical/angular
       carveEllipse(cx,cy,ri(2,4),ri(2,3));
       if(rand()<.5)carveEllipse(cx+ri(-3,3),cy+ri(-3,3),ri(1,3),ri(1,2));
+    } else if(biome==='tundra'){
+      // Tundra: large open areas with sparse angular rock ridges
+      carveEllipse(cx,cy,ri(3,6),ri(2,4));
+      if(rand()<.3)carveEllipse(cx+ri(-4,4),cy+ri(-4,4),ri(2,4),ri(1,3));
     } else {
-      // Volcanic: large lava-field patches + rock ridges
       carveBlob(cx,cy,ri(14,30));
       if(rand()<.35)carveBlob(cx+ri(-5,5),cy+ri(-5,5),ri(8,18));
     }
   }
 
-  // ── WATER / LAVA PATCHES ─────────────────────────────────────────────────
-  const liquidTile=floor<=1?2:(floor<=3?2:3);
-  const numPools=4+ri(0,3);
+  // ── WATER / LAVA / ICE PATCHES ───────────────────────────────────────────
+  // tile 2 = water/swamp; tile 3 = lava/toxic/ice (does damage to player)
+  const liquidTile = (biome==='volcanic'||biome==='tundra') ? 3 : 2;
+  const numPools=4+ri(0,3)+(biome==='swamp'?3:0); // swamp gets extra pools
   for(let i=0;i<numPools;i++){
     const cx=ri(4,COLS-5),cy=ri(4,ROWS-5);
     const rx=ri(2,4),ry=ri(2,3);
@@ -2673,23 +3068,48 @@ function generateMap(floor, seed){
   const spawnRoom={cx:spawnTX*TILE,cy:spawnTY*TILE};
   const exitRoom={cx:exitTX*TILE,cy:exitTY*TILE};
 
-  // ── TREE OBJECTS: placed on void tiles, drawn as real trees ──────────────
-  // For every void tile, probabilistically place a tree at a random position
-  // within that tile. Trees are world-space objects, not tile stamps.
+  // ── CELLULAR AUTOMATA SMOOTHING ───────────────────────────────────────────
+  // Rounds jagged 90° tile corners into organic blobs. 4 passes of birth/death:
+  //   floor tile with ≤2 floor neighbours → dies (removes spurs/spikes)
+  //   void tile with ≥6 floor neighbours → fills (closes narrow gaps)
+  // Liquid tiles are preserved. Tree placement happens after so trees only
+  // appear on tiles that are actually void in the final smoothed grid.
+  for(let pass=0;pass<4;pass++){
+    const next=new Uint8Array(grid);
+    for(let ty=1;ty<ROWS-1;ty++){
+      for(let tx=1;tx<COLS-1;tx++){
+        const cur=grid[ty*COLS+tx];
+        if(cur===2||cur===3)continue;
+        let floorN=0;
+        for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+          if(dx===0&&dy===0)continue;
+          const v=grid[(ty+dy)*COLS+(tx+dx)];
+          if(v===1||v===2||v===3)floorN++;
+        }
+        if(cur===1&&floorN<=2)next[ty*COLS+tx]=0;
+        else if(cur===0&&floorN>=6)next[ty*COLS+tx]=1;
+      }
+    }
+    grid.set(next);
+  }
+  // Re-clear spawn & exit after smoothing so they're always open
+  clearCircle(spawnTX,spawnTY,6);
+  clearCircle(exitTX,exitTY,5);
+
+  // ── TREE OBJECTS: placed after CA so trees match the final smoothed grid ──
   const trees=[];
   if(biome==='forest'){
     for(let ty=1;ty<ROWS-1;ty++){
       for(let tx=1;tx<COLS-1;tx++){
         if(grid[ty*COLS+tx]!==0)continue;
-        // Skip if near a walkable tile (edge trees placed by the blend pass)
         const near=grid[(ty-1)*COLS+tx]===1||grid[(ty+1)*COLS+tx]===1||grid[ty*COLS+tx-1]===1||grid[ty*COLS+tx+1]===1;
         const prob=near?0.55:0.28;
         if(rand()>prob)continue;
         const wx2=tx*TILE+rand()*TILE,wy2=ty*TILE+rand()*TILE;
-        const treeR=12+rand()*14; // canopy radius
+        const treeR=12+rand()*14;
         const lean=(rand()-.5)*.4;
-        const hue=100+Math.floor(rand()*30); // green hue variation
-        const dark=Math.floor(rand()*3); // 0=normal,1=darker,2=lighter
+        const hue=100+Math.floor(rand()*30);
+        const dark=Math.floor(rand()*3);
         trees.push({x:wx2,y:wy2,r:treeR,lean,hue,dark,type:'tree'});
       }
     }
@@ -2717,7 +3137,7 @@ function initGame(){
     mapData,
     exitPortal:null, // set when boss dies
     enemies:[],bullets:[],orbs:[],coins:[],drops:[],chests:[],healthpacks:[],ghosts:[],
-    shopNPC:null,shopOpen:false,shopItems:[],shopOpenTimer:0,
+    shopNPC:null,shopOpen:false,shopItems:rollShop(),shopOpenTimer:0,shopLocked:false,
     boss:null,bossSpawned:false,floorClearing:false,
     score:0,kills:0,floor,wave:0,
     gameOver:false,paused:false,
@@ -2749,7 +3169,8 @@ function nextFloor(){
   G.bossSpawned=false;G.floorClearing=false;
   G.exitPortal=null;G.wave=0;
   G.wavePool=0;G.waveSpawned=0;G.waveKilled=0;
-  G.inGrace=true;G.graceTimer=2.0;
+  G.inGrace=true;G.graceTimer=2.5;
+  G.shopLocked=false;G.shopItems=rollShop(); // fresh set of items, locked once waves start
   G.chests=[];G.drops=[];G.orbs=[];G.coins=[];G.healthpacks=[];G.enemies=[];G.bullets=[];
   const spawn=mapData.spawnRoom;
   G.player.x=spawn.cx-14; G.player.y=spawn.cy-14;
@@ -2868,15 +3289,29 @@ function update(dt){
       if(nx>=0&&ny>=0&&nx<COLS&&ny<ROWS)disc[ny*COLS+nx]=1;
     }
   }
-  // Lava / water damage
+  // Tile hazard / slow
   if(G.mapData){
-    const tx=Math.floor(p.cx/G.mapData.TILE),ty=Math.floor(p.cy/G.mapData.TILE);
-    const tile=G.mapData.grid[ty*G.mapData.COLS+tx]||0;
-    if(tile===3&&p.invuln<=0){// lava
-      p.hurt(18*dt);p.invuln=.05;
-      if(Math.random()<.1)pEmit(p.cx,p.cy,{n:3,spd:40,life:.2,sz:4,col:'#ff6600',glow:14,grav:0,drag:.7});
-    } else if(tile===2){// water — slow
-      p.vx*=.6;p.vy*=.6;
+    const ttx=Math.floor(p.cx/G.mapData.TILE),tty=Math.floor(p.cy/G.mapData.TILE);
+    const tile=G.mapData.grid[tty*G.mapData.COLS+ttx]||0;
+    if(p.lavaCd>0)p.lavaCd-=dt;
+    if(tile===3){
+      // Lava / toxic / ice: damage every 0.3s regardless of invuln
+      if(!p.lavaCd||p.lavaCd<=0){
+        p.lavaCd=0.3;
+        const dmg=6+G.floor*1.5|0; // scales with floor: ~6 HP early, ~20 HP late
+        p.hp=Math.max(0,p.hp-dmg);
+        if(p.hp<=0)p.dead=true;
+        flash(220,60,0,.25);shake(.14);
+        pEmit(p.cx,p.cy,{n:5,spd:55,life:.22,sz:5,col:'#ff6600',glow:16,grav:0,drag:.7});
+        spawnFloat(p.cx,p.cy-22,`-${dmg}`,'#ff6600',12,.6);
+      }
+      // Also slow the player slightly on hazard tiles
+      p.vx*=.82;p.vy*=.82;
+    } else {
+      p.lavaCd=0;
+      if(tile===2){// water — slow
+        p.vx*=.65;p.vy*=.65;
+      }
     }
   }
   // combo decay
@@ -2887,13 +3322,16 @@ function update(dt){
   // wave management
   // Each wave has a finite pool of enemies to kill. Kill them all → grace → next wave.
   // Wave 3 = boss wave (no regular enemies). Kill boss → floor clear → next floor.
+  // Boss wave is wave 6 within each floor cycle (waves 1-5 regular, 6 = boss)
+  const WAVES_PER_FLOOR=6;
+  const isBossWave=(w)=>w%WAVES_PER_FLOOR===0&&w>0;
+
   if(G.inGrace){
     G.graceTimer-=dt;
     if(G.graceTimer<=0){
       G.inGrace=false;G.wave++;
-      const isBossWave=G.wave%3===0;
-      if(isBossWave){
-        // Spawn boss at exit room
+      G.shopLocked=true; // shop closes when first wave begins
+      if(isBossWave(G.wave)){
         const bossRoom=G.mapData?G.mapData.exitRoom:{cx:WORLD_W/2,cy:WORLD_H/2};
         G.boss=new Boss(G.floor);
         G.boss.x=bossRoom.cx-36;G.boss.y=bossRoom.cy-36;
@@ -2901,31 +3339,26 @@ function update(dt){
         G.wavePool=0;G.waveKilled=0;
         showWaveMsg(`⚠ BOSS ⚠`);shake(.3);flash(255,0,0,.28);
       } else {
-        // Regular wave: set a pool size, start trickling enemies in
-        G.wavePool=8+G.floor*2+(G.wave-1)*2;
-        G.waveKilled=0;
-        G.waveSpawned=0;
-        G.spawnInterval=Math.max(.5,2.0-G.floor*.12-(G.wave-1)*.1);
-        G.maxEnemies=Math.min(10,4+G.floor+(G.wave-1));
+        const wNum=G.wave%WAVES_PER_FLOOR||5; // wave number within floor 1-5
+        G.wavePool=15+G.floor*4+(wNum-1)*4;  // grows quickly per wave and floor
+        G.waveKilled=0;G.waveSpawned=0;
+        G.spawnInterval=Math.max(.3,1.8-G.floor*.1-(wNum-1)*.12);
+        G.maxEnemies=Math.min(22,6+G.floor+(wNum-1)*2);
         G.spawnT=1.0;
         showWaveMsg(`WAVE ${G.wave}`);
       }
     }
   } else {
     const liveEnemies=G.enemies.filter(e=>!e.dead).length;
-    const isBossWave=G.wave%3===0;
-
-    if(isBossWave){
+    if(isBossWave(G.wave)){
       // Boss wave ends when boss is dead (handled in boss-null block below)
     } else {
-      // Trickle-spawn until pool is exhausted
       G.spawnT-=dt;
       if(G.spawnT<=0&&liveEnemies<G.maxEnemies&&G.waveSpawned<G.wavePool){
         G.enemies.push(spawnEnemy());
         G.waveSpawned++;
-        G.spawnT=G.spawnInterval*rnd(.8,1.25);
+        G.spawnT=G.spawnInterval*rnd(.75,1.2);
       }
-      // Wave ends when all pool enemies have spawned AND all are dead
       if(G.waveSpawned>=G.wavePool&&liveEnemies===0){
         G.inGrace=true;G.graceTimer=3.5;
       }
@@ -3033,6 +3466,25 @@ function update(dt){
     }
   }
 
+  // enemy projectiles (shooter) → player
+  if(p.invuln<=0){
+    for(const b of G.bullets){
+      if(!b.fromEnemy||b.dead)continue;
+      b.life-=dt;if(b.life<=0){b.dead=true;continue;}
+      const bd2=btFrozen>0?.08:1;
+      b.x+=b.vx*dt*bd2;b.y+=b.vy*dt*bd2;
+      if(isSolidTile(b.x,b.y)||b.x<0||b.x>WORLD_W||b.y<0||b.y>WORLD_H){b.dead=true;continue;}
+      if(dist(b.x,b.y,p.cx,p.cy)<16){
+        b.dead=true;
+        if(p.barrierHp>0){p.barrierHp=0;p.barrierCd=10;spawnSW(p.cx,p.cy,'#4488ff',40);spawnFloat(p.cx,p.cy-26,'BLOCKED!','#4488ff',13,.8);continue;}
+        p.hurt(b.dmg);p.invuln=.45+(p.bonusInvuln||0);
+        shake(.22);flash(50,200,255,.22);
+        pEmit(p.cx,p.cy,{n:8,spd:120,life:.35,sz:rnd(2,5),col:'#44ccff',glow:12,grav:80,drag:.86});
+        spawnFloat(p.cx,p.y-10,`-${b.dmg}`,'#44ddff',13,.7);
+      }
+    }
+  }
+
   // enemy ↔ player contact
   const allE=[...G.enemies,...(G.boss&&!G.boss.dead?[G.boss]:[])];
   for(const e of allE){
@@ -3051,8 +3503,8 @@ function update(dt){
 
   // pickups
   for(const o of G.orbs)o.update(dt,p);
-  for(const c of G.coins){c.update(dt,p);if(c.dead)spawnFloat(p.cx,p.cy-18,`+${c.val}⬡`,'#ffcc44',11,.5);}
-  for(const h of G.healthpacks){h.update(dt,p);if(h.dead){p.hp=Math.min(p.maxHp,p.hp+h.heal);spawnFloat(p.cx,p.cy-22,`+${h.heal} HP`,'#ff4466',14,.9);pEmit(p.cx,p.cy,{n:8,spd:60,life:.3,sz:4,col:'#ff4466',glow:16,drag:.75});}}
+  for(const c of G.coins){c.update(dt,p);if(c.dead&&c.pickedUp)spawnFloat(p.cx,p.cy-18,`+${c.val}⬡`,'#ffcc44',11,.5);}
+  for(const h of G.healthpacks){h.update(dt,p);if(h.dead&&h.pickedUp){p.hp=Math.min(p.maxHp,p.hp+h.heal);spawnFloat(p.cx,p.cy-22,`+${h.heal} HP`,'#ff4466',14,.9);pEmit(p.cx,p.cy,{n:8,spd:60,life:.3,sz:4,col:'#ff4466',glow:16,drag:.75});}}
   for(const d of G.drops){d.update(dt,p);if(d.dead){p.weapon=d.w;spawnFloat(p.cx,p.y-28,`${d.w.name}!`,d.w.col,15,1.1);pEmit(p.cx,p.cy,{n:10,spd:110,type:'spark',life:.28,sz:4,col:d.w.col,glow:18,drag:.8});spawnSW(p.cx,p.cy,d.w.glow,46);}}
   for(const ch of G.chests)ch.update(dt,p);
   if(G.shopNPC)G.shopNPC.update(dt,p);
@@ -3070,8 +3522,8 @@ function update(dt){
     // Boss killed — open exit portal grace then advance floor
     if(G.bossSpawned&&!G.floorClearing){
       G.floorClearing=true;
-      showWaveMsg(`FLOOR ${G.floor} CLEAR!`);shake(.2);flash(100,255,150,.2);
-      setTimeout(()=>{if(G&&!G.gameOver)nextFloor();},2000);
+      showWaveMsg(`FLOOR ${G.floor} CLEAR! · FIND THE EXIT`);shake(.2);flash(100,255,150,.2);
+      // No auto-advance — player must reach and use the exit portal (E key)
     }
   }
 
@@ -3099,11 +3551,39 @@ function spawnEnemy(){
     x=clamp(x,50,WORLD_W-50);y=clamp(y,50,WORLD_H-50);
   }
   const f=G.floor,r=Math.random();
-  const isElite=r<Math.min(.12,.03+G.floor*.015);
+  const eliteChance=Math.min(.20,.04+f*.018);
+  const isElite=r<eliteChance;
   let e;
-  if(f>=5&&r<.15)e=new EnemyCharger(x-16,y-16,f);
-  else if(f>=3&&r<.42)e=new EnemyBat(x-10,y-10,f);
-  else e=new EnemySlime(x-13,y-13,f);
+  // Spawn table expands with floor: earlier floors are forgiving, later floors brutal
+  if(f>=8){
+    const t=Math.random();
+    if(t<.18)e=new EnemyCharger(x-16,y-16,f);
+    else if(t<.36)e=new EnemyBrute(x-20,y-20,f);
+    else if(t<.54)e=new EnemyShooter(x-12,y-12,f);
+    else if(t<.72)e=new EnemyBat(x-10,y-10,f);
+    else e=new EnemySlime(x-13,y-13,f);
+  } else if(f>=6){
+    const t=Math.random();
+    if(t<.20)e=new EnemyCharger(x-16,y-16,f);
+    else if(t<.38)e=new EnemyBrute(x-20,y-20,f);
+    else if(t<.58)e=new EnemyShooter(x-12,y-12,f);
+    else if(t<.76)e=new EnemyBat(x-10,y-10,f);
+    else e=new EnemySlime(x-13,y-13,f);
+  } else if(f>=4){
+    const t=Math.random();
+    if(t<.16)e=new EnemyCharger(x-16,y-16,f);
+    else if(t<.36)e=new EnemyShooter(x-12,y-12,f);
+    else if(t<.58)e=new EnemyBat(x-10,y-10,f);
+    else e=new EnemySlime(x-13,y-13,f);
+  } else if(f>=3){
+    const t=Math.random();
+    if(t<.25)e=new EnemyShooter(x-12,y-12,f);
+    else if(t<.50)e=new EnemyBat(x-10,y-10,f);
+    else e=new EnemySlime(x-13,y-13,f);
+  } else {
+    // Floors 1-2: only slimes and bats
+    e=Math.random()<.35?new EnemyBat(x-10,y-10,f):new EnemySlime(x-13,y-13,f);
+  }
   if(isElite)e.makeElite();
   return e;
 }
@@ -3131,12 +3611,22 @@ function render(dt){
 
   drawFX();
   drawExitPortal();
+  drawExitPortalArrow();
 
   if(G.boss)G.boss.draw();
   for(const e of G.enemies){if(onScreenPt(e.cx,e.cy,60))e.draw();}
   if(!G.gameOver)G.player.draw();
   if(G.ghosts)for(const g of G.ghosts)g.draw();
-  for(const b of G.bullets){if(onScreenPt(b.x,b.y,20))b.draw();}
+  for(const b of G.bullets){
+    if(b.fromEnemy){
+      if(!b.dead&&onScreenPt(b.x,b.y,20)){
+        ctx.save();ctx.shadowColor=b.col||'#44ddff';ctx.shadowBlur=14;
+        ctx.fillStyle=b.col||'#44ddff';ctx.globalAlpha=.88;ctx.beginPath();ctx.arc(wx(b.x),wy(b.y),6,0,Math.PI*2);ctx.fill();
+        ctx.globalAlpha=1;ctx.fillStyle='#fff';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(wx(b.x),wy(b.y),3,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+      }
+    } else if(onScreenPt(b.x,b.y,20)) b.draw();
+  }
   if(G.boss)for(const bb of G.boss.bullets)bb.draw();
   for(const o of G.orbs){if(onScreenPt(o.x,o.y,20))o.draw();}
   for(const c of G.coins){if(onScreenPt(c.x,c.y,20))c.draw();}

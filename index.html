@@ -1234,7 +1234,7 @@ class Entity{
   get cy(){return this.y+this.h/2;}
   move(dt){this.x+=this.vx*dt;this.y+=this.vy*dt;}
   hurt(d,type=''){
-    if(d<=0)return;
+    if(d<=0||this.dead)return;
     this.hp-=d;this.hitFlash=1;
     if(this.hp<=0){this.hp=0;this.dead=true;this.onDeath();}
   }
@@ -1850,6 +1850,8 @@ class Boss extends Entity{
     this.dashCd=0;
   }
   onDeath(){
+    if(this._defeatHandled)return;
+    this._defeatHandled=true;
     this.deathAnim=1;
     for(let i=0;i<5;i++)setTimeout(()=>{
       pEmit(this.cx+rnd(-25,25),this.cy+rnd(-20,20),{n:10,spd:rnd(80,280),life:rnd(.4,.9),sz:rnd(3,8),col:['#ff4444','#ff8800','#ffff44','#ff44ff'][i%4],glow:22,drag:.84});
@@ -1857,6 +1859,16 @@ class Boss extends Entity{
     },i*120);
     shake(.9);flash(255,80,0,.6);
     spawnFloat(this.cx,this.cy-45,'BOSS SLAIN!','#ffdd00',26,2.2);
+    // Rewards + exit portal must run for ANY lethal source (DoT, AoE, thorns, etc.), not only direct bullet hits
+    addKill(this.xpDrop,this.goldDrop);G.score+=G.floor*500;
+    flash(255,150,0,.45);
+    const wks=Object.keys(WEAPONS).filter(k=>k!=='pistol');
+    G.drops.push(new WeaponDrop(this.cx,this.cy,wks[Math.floor(Math.random()*wks.length)]));
+    G.drops.push(new WeaponDrop(this.cx+45,this.cy,wks[Math.floor(Math.random()*wks.length)]));
+    for(let i=0;i<5;i++)G.coins.push(new GoldCoin(this.cx+rnd(-30,30),this.cy+rnd(-20,20),rnd(5,12)|0));
+    const er=G.mapData?G.mapData.exitRoom:{cx:this.cx+100,cy:this.cy};
+    G.exitPortal={x:er.cx,y:er.cy};
+    spawnFloat(this.cx,this.cy-60,'EXIT PORTAL OPENED!','#44ffaa',16,2.0);
   }
   update(dt,target){
     if(this.spawnAnim<1)this.spawnAnim=clamp(this.spawnAnim+dt*2,0,1);
@@ -3557,18 +3569,6 @@ function update(dt){
         G.boss.hurt(b.dmg);b.dead=true;
         pEmit(b.x,b.y,{n:8,spd:175,type:'spark',life:.2,sz:4,col:'#ff6600',glow:20,drag:.8});
         shake(.06);spawnFloat(G.boss.cx,G.boss.cy-12,`-${b.dmg}`,'#ffaa44',11,.45);
-        if(G.boss.dead){
-          addKill(G.boss.xpDrop,G.boss.goldDrop);G.score+=G.floor*500;
-          flash(255,150,0,.45);
-          const wks=Object.keys(WEAPONS).filter(k=>k!=='pistol');
-          G.drops.push(new WeaponDrop(G.boss.cx,G.boss.cy,wks[Math.floor(Math.random()*wks.length)]));
-          G.drops.push(new WeaponDrop(G.boss.cx+45,G.boss.cy,wks[Math.floor(Math.random()*wks.length)]));
-          for(let i=0;i<5;i++)G.coins.push(new GoldCoin(G.boss.cx+rnd(-30,30),G.boss.cy+rnd(-20,20),rnd(5,12)|0));
-          // Spawn exit portal at exit room
-          const er=G.mapData?G.mapData.exitRoom:{cx:G.boss.cx+100,cy:G.boss.cy};
-          G.exitPortal={x:er.cx,y:er.cy};
-          spawnFloat(G.boss.cx,G.boss.cy-60,'EXIT PORTAL OPENED!','#44ffaa',16,2.0);
-        }
         break;
       }
     }
